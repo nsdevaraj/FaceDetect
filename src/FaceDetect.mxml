@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:WindowedApplication xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					   xmlns:s="library://ns.adobe.com/flex/spark" 
+					   xmlns:face="com.nsdevaraj.face.*"
+					   width="100%" height="100%" 
+					   showStatusBar="false" 
+					   creationComplete="creationCompleteHandler(event)">
+	<fx:Script>
+		<![CDATA[
+			import com.nsdevaraj.face.CameraBitmap;
+			
+			import jp.maaash.ObjectDetection.ObjectDetector;
+			import jp.maaash.ObjectDetection.ObjectDetectorEvent;
+			import jp.maaash.ObjectDetection.ObjectDetectorOptions;
+			
+			private var detector    :ObjectDetector;
+			private var g :Graphics;
+			
+			private var camera:CameraBitmap;
+			private var detectionMap:BitmapData;
+			private var drawMatrix:Matrix;
+			private var scaleFactor:int = 4; 
+			
+			private function cameraReadyHandler( event:Event ):void
+			{
+				/* 
+				if(!event.target.selected){
+					g.clear();
+					view.img.source  = new Bitmap(camera.bitmapData ) ; 
+				}else{
+					view.img.source = new Bitmap(camera.click());
+					detectionMap.draw(camera.bitmapData,drawMatrix,null,"normal",null,true);
+					detector.detect( detectionMap );
+				} */
+				detectionMap.draw(camera.bitmapData,drawMatrix,null,"normal",null,true);
+				detector.detect( detectionMap );
+			}
+			
+			private function initDetector():void
+			{
+				detector = new ObjectDetector();
+				
+				var options:ObjectDetectorOptions = new ObjectDetectorOptions();
+				options.min_size  = 30;
+				detector.options = options;
+				detector.addEventListener(ObjectDetectorEvent.DETECTION_COMPLETE, detectionHandler );
+			}
+			
+			private function detectionHandler( e :ObjectDetectorEvent ):void
+			{
+				g.clear();
+				if( e.rects ){
+					cursor.visible =false;
+					g.lineStyle( 1 );	// black 2pix
+					e.rects.forEach( function( r :Rectangle, idx :int, arr :Array ) :void {
+						//g.drawRect( r.x * scaleFactor, r.y * scaleFactor, r.width * scaleFactor, r.height * scaleFactor );
+						
+						var maskSX:Number = (r.width * scaleFactor)*2
+						var maskSY:Number = (r.height * scaleFactor)*2
+						var maskX:Number = 0
+						var maskY:Number = 0
+						var headCenterX:Number = ((r.width / 2 )* scaleFactor) + (r.x * scaleFactor)
+						var headCenterY:Number = ((r.height / 2 )* scaleFactor) + (r.y * scaleFactor)
+						maskX = headCenterX - (maskSX / 2)
+						maskY = headCenterY - ((maskSY /2)-(width/10))
+						cursor.x = headCenterX -11
+						cursor.y = headCenterY -11
+						cursor.visible =true;
+						trace(maskX + '  '+maskY+ ' '+headCenterX+ ' '+headCenterY+ ' '+r.x+ ' '+r.y)
+					});
+				} 
+			}
+			
+			protected function creationCompleteHandler(event:Event):void
+			{
+				camera = new CameraBitmap( width, height, 15 );
+				view.img.source = new Bitmap(camera.bitmapData ) ;
+				detectionMap = new BitmapData(width / scaleFactor, height / scaleFactor, false, 0 );
+				drawMatrix = new Matrix( 1/ scaleFactor, 0, 0, 1 / scaleFactor );
+				g = view.faceRect.graphics;
+				initDetector(); 
+				camera.addEventListener( Event.RENDER, cameraReadyHandler );
+			}
+			
+		]]>
+	</fx:Script>
+	<face:FaceViewer id="view" width="100%" height="100%"/>
+	<s:Image id="cursor" source="cursor_move.gif" x="100" y="100"/>
+	<!--<s:ToggleButton id="capture" label="{capture.selected?'Cancel':'Capture'}" click="cameraReadyHandler(event)"/>-->
+</s:WindowedApplication>
