@@ -7,7 +7,9 @@
 					   creationComplete="creationCompleteHandler(event)">
 	<fx:Script>
 		<![CDATA[
+			import com.nsdevaraj.face.CMotionTracker;
 			import com.nsdevaraj.face.CameraBitmap;
+			import com.nsdevaraj.face.MotionTracker;
 			
 			import jp.maaash.ObjectDetection.ObjectDetector;
 			import jp.maaash.ObjectDetection.ObjectDetectorEvent;
@@ -17,29 +19,22 @@
 			private var g :Graphics;
 			
 			private var camera:CameraBitmap;
+			
+			private var cam:Camera;
 			private var detectionMap:BitmapData;
 			private var drawMatrix:Matrix;
-			private var scaleFactor:int = 4; 
-			
+			private var scaleFactor:int = 4;  
+			private var v:Video;
+			private var mt:CMotionTracker;
 			private function cameraReadyHandler( event:Event ):void
-			{
-				/* 
-				if(!event.target.selected){
-					g.clear();
-					view.img.source  = new Bitmap(camera.bitmapData ) ; 
-				}else{
-					view.img.source = new Bitmap(camera.click());
-					detectionMap.draw(camera.bitmapData,drawMatrix,null,"normal",null,true);
-					detector.detect( detectionMap );
-				} */
+			{ 
 				detectionMap.draw(camera.bitmapData,drawMatrix,null,"normal",null,true);
 				detector.detect( detectionMap );
-			}
+			} 
 			
 			private function initDetector():void
 			{
 				detector = new ObjectDetector();
-				
 				var options:ObjectDetectorOptions = new ObjectDetectorOptions();
 				options.min_size  = 30;
 				detector.options = options;
@@ -54,19 +49,12 @@
 					g.lineStyle( 1 );	// black 2pix
 					e.rects.forEach( function( r :Rectangle, idx :int, arr :Array ) :void {
 						//g.drawRect( r.x * scaleFactor, r.y * scaleFactor, r.width * scaleFactor, r.height * scaleFactor );
-						
-						var maskSX:Number = (r.width * scaleFactor)*2
-						var maskSY:Number = (r.height * scaleFactor)*2
-						var maskX:Number = 0
-						var maskY:Number = 0
-						var headCenterX:Number = ((r.width / 2 )* scaleFactor) + (r.x * scaleFactor)
-						var headCenterY:Number = ((r.height / 2 )* scaleFactor) + (r.y * scaleFactor)
-						maskX = headCenterX - (maskSX / 2)
-						maskY = headCenterY - ((maskSY /2)-(width/10))
-						cursor.x = headCenterX -11
-						cursor.y = headCenterY -11
+						var faceLeftX:Number = (r.x * scaleFactor)
+						var faceBottomY:Number = ((r.height  )* scaleFactor) + (r.y * scaleFactor) +20
+						cursor.x = faceLeftX -11
+						cursor.y = faceBottomY -11
 						cursor.visible =true;
-						trace(maskX + '  '+maskY+ ' '+headCenterX+ ' '+headCenterY+ ' '+r.x+ ' '+r.y)
+						//trace(faceLeftX+ ' '+faceBottomY+ ' '+r.x+ ' '+r.y)
 					});
 				} 
 			}
@@ -74,17 +62,79 @@
 			protected function creationCompleteHandler(event:Event):void
 			{
 				camera = new CameraBitmap( width, height, 15 );
+				cam = Camera.getCamera();
+				cam.setMode( width, height, 15, true );
+				v = new Video(width, height);
+				v.attachCamera(cam);
+				v.x = v.y =0;
+				mt = new CMotionTracker(v);
 				view.img.source = new Bitmap(camera.bitmapData ) ;
 				detectionMap = new BitmapData(width / scaleFactor, height / scaleFactor, false, 0 );
 				drawMatrix = new Matrix( 1/ scaleFactor, 0, 0, 1 / scaleFactor );
 				g = view.faceRect.graphics;
 				initDetector(); 
 				camera.addEventListener( Event.RENDER, cameraReadyHandler );
+				v.addEventListener(Event.EXIT_FRAME, loop);
 			}
 			
+			private function loop(e:Event):void {
+				var p:Point = new Point();
+				
+				// if there is motion
+				if (mt.track()){
+					p.x = mt.x;
+					p.y = mt.y;			
+					
+					bound.graphics.clear();			 
+					bound.graphics.lineStyle(2, 0x0000ff);				
+					bound.graphics.drawCircle(p.x, p.y, 3);
+					bound.graphics.lineStyle(2, 0xff0000);
+					bound.graphics.drawCircle(p.x , p.y, 3);
+					//bound.graphics.drawRect(mt.bound.x, mt.bound.y, mt.bound.width, mt.bound.height);
+					 
+					var ev:MouseEvent = new MouseEvent(MouseEvent.CLICK,true,false,p.x,p.y);
+					dispatchEventUnderMouse(ev,stage,p);
+				}
+			}
+			
+			
+			public static function dispatchEventUnderMouse(event:Event, stage:Stage, point:Point):Boolean {
+				//return if stage is disabled
+				if (!stage.mouseEnabled) return false;
+				//find the topmost object
+				var cur:DisplayObject = stage.getObjectsUnderPoint(point).pop();
+				if (cur == null) cur = stage;
+				//build the path
+				var path:Array = [];
+				while (cur != null) {
+					path.push(cur);
+					cur = cur.parent;
+				}
+				//traverse the path from the root to find the right InteractiveObject
+				while (path.length > 0) {
+					cur = path.pop();
+					if (cur is InteractiveObject) {
+						if (!(cur as InteractiveObject).mouseEnabled) {
+							cur = cur.parent;
+							break;
+						}
+						if (cur is DisplayObjectContainer) {
+							if (!(cur as DisplayObjectContainer).mouseChildren) break;
+						}
+					}
+					else {
+						cur = cur.parent;
+						break;                                  
+					}
+				}
+				return cur.dispatchEvent(event);
+			}
 		]]>
 	</fx:Script>
-	<face:FaceViewer id="view" width="100%" height="100%"/>
+
+	<face:FaceViewer id="view" width="100%" height="100%"/> 
 	<s:Image id="cursor" source="cursor_move.gif" x="100" y="100"/>
+	<s:Button id="btn" click="{btn.visible=false}" x="100" y="100"/>
+	<s:SpriteVisualElement id="bound" width="100%" height="100%"/>
 	<!--<s:ToggleButton id="capture" label="{capture.selected?'Cancel':'Capture'}" click="cameraReadyHandler(event)"/>-->
 </s:WindowedApplication>

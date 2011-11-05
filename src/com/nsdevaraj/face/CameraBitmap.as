@@ -21,7 +21,7 @@ package com.nsdevaraj.face
 		private var __width:int;
 		private var __height:int;
 		
-		private var __cam:Camera;
+		public var __cam:Camera;
 		private var __video:Video;
 		
 		private var __refreshRate:int;
